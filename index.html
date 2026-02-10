@@ -1,517 +1,519 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, 
-    signInAnonymously, 
-    signInWithCustomToken, 
-    onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-    getFirestore, 
-    doc, 
-    setDoc, 
-    onSnapshot, 
-    collection 
-} from 'firebase/firestore';
-import { 
-    BookOpen, 
-    Layers, 
-    ChevronRight, 
-    Home, 
-    RefreshCcw, 
-    Search, 
-    CheckCircle, 
-    Archive, 
-    RotateCcw, 
-    Award,
-    ArrowLeft,
-    ExternalLink
-} from 'lucide-react';
 
-// --- Firebase Configuration ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'kanji-master-100';
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanji Master 100</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+        body { font-family: 'ui-sans-serif', system-ui, sans-serif; background-color: #F0F4F8; }
+        .kanji-font { font-family: "Hiragino Kaku Gothic Pro", "Meiryo", "MS PGothic", "Noto Sans JP", sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-const KANJI_DATA = [
-    { id: 1, kanji: "日", onyomi: "ニチ", kunyomi: "ひ", meaning: "Dag/Zon", sentenceOn: "日曜日は休みです。", romajiOn: "Nichiyoubi wa yasumi desu.", transOn: "Zondag is een vrije dag.", sentenceKun: "日が暮れる。", romajiKun: "Hi ga kureru.", transKun: "De zon gaat onder." },
-    { id: 2, kanji: "一", onyomi: "イチ", kunyomi: "ひと", meaning: "Eén", sentenceOn: "一分待ってください。", romajiOn: "Ippun matte kudasai.", transOn: "Wacht een minuut alstublieft.", sentenceKun: "一つ食べました。", romajiKun: "Hitotsu tabemashita.", transKun: "Ik heb er eentje gegeten." },
-    { id: 3, kanji: "国", onyomi: "コク", kunyomi: "くに", meaning: "Land", sentenceOn: "中国に行きます。", romajiOn: "Chuugoku ni ikimasu.", transOn: "Ik ga naar China.", sentenceKun: "お国 is dochira desu ka?", romajiKun: "Okuni wa dochira desu ka?", transKun: "Uit welk land komt u?" },
-    { id: 4, kanji: "会", onyomi: "カイ", kunyomi: "あ(う)", meaning: "Ontmoeten", sentenceOn: "会議を始めます。", romajiOn: "Kaigi o hajimemasu.", transOn: "We beginnen de vergadering.", sentenceKun: "明日会いましょう。", romajiKun: "Ashita aimashou.", transKun: "Laten we morgen afspreken." },
-    { id: 5, kanji: "人", onyomi: "ジン", kunyomi: "ひと", meaning: "Persoon", sentenceOn: "三人の学生。", romajiOn: "Sannin no gospel.", transOn: "Drie studenten.", sentenceKun: "あの人は誰ですか？", romajiKun: "Ano hito wa dare desu ka?", transKun: "Wie is die persoon?" },
-    { id: 6, kanji: "大", onyomi: "ダイ", kunyomi: "おお(きい)", meaning: "Groot", sentenceOn: "大事な用事がある。", romajiOn: "Daiji na youji ga aru.", transOn: "Ik heb een belangrijke zaak.", sentenceKun: "大きな声で話す。", romajiKun: "Ookina koe de hanasu.", transKun: "Met een luide stem praten." },
-    { id: 7, kanji: "時", onyomi: "ジ", kunyomi: "とき", meaning: "Tijd", sentenceOn: "何時ですか？", romajiOn: "Nanji desu ka?", transOn: "Hoe laat is het?", sentenceKun: "時々料理をします。", romajiKun: "Tokidoki ryouri o shimasu.", transKun: "Soms kook ik." },
-    { id: 8, kanji: "本", onyomi: "ホン", kunyomi: "もと", meaning: "Boek/Basis", sentenceOn: "日本語を勉強する。", romajiOn: "Nihongo o benkyou suru.", transOn: "Japans studeren.", sentenceKun: "木の本。", romajiKun: "Ki no moto.", transKun: "De voet van de boom." },
-    { id: 9, kanji: "水", onyomi: "スイ", kunyomi: "みず", meaning: "Water", sentenceOn: "水泳が好きです。", romajiOn: "Suiei ga suki desu.", transOn: "Ik hou van zwemmen.", sentenceKun: "冷たい水を飲む。", romajiKun: "Tsumetai mizu o nomu.", transKun: "Koud water drinken." },
-    { id: 10, kanji: "山", onyomi: "サン", kunyomi: "やま", meaning: "Berg", sentenceOn: "火山が噴火する。", romajiOn: "Kazan ga funka suru.", transOn: "De vulkaan barst uit.", sentenceKun: "山道を行く。", romajiKun: "Yamamichi o iku.", transKun: "Over een bergpad gaan." },
-    { id: 11, kanji: "中", onyomi: "チュウ", kunyomi: "なか", meaning: "Midden/Binnen", sentenceOn: "中学に通う。", romajiOn: "Chuugaku ni kayou.", transOn: "Naar de middenschool gaan.", sentenceKun: "箱の中身は何？", romajiKun: "Hako no nakami wa nani?", transKun: "Wat zit er in de doos?" },
-    { id: 12, kanji: "出", onyomi: "シュツ", kunyomi: "で(る)", meaning: "Uitgaan", sentenceOn: "出席を取ります。", romajiOn: "Shusseki o torimasu.", transOn: "Ik neem de presentie op.", sentenceKun: "部屋を出る。", romajiKun: "Heya o deru.", transKun: "De kamer verlaten." },
-    { id: 13, kanji: "上", onyomi: "ジョウ", kunyomi: "うえ", meaning: "Boven", sentenceOn: "机の上にある。", romajiOn: "Tsukue no ue ni aru.", transOn: "Het ligt op het bureau.", sentenceKun: "坂を上る。", romajiKun: "Saka o noboru.", transKun: "De helling opgaan." },
-    { id: 14, kanji: "下", onyomi: "カ", kunyomi: "した", meaning: "Beneden", sentenceOn: "地下鉄に乗る。", romajiOn: "Chikatetsu ni noru.", transOn: "De metro nemen.", sentenceKun: "木の下で休む。", romajiKun: "Ki no shita de yasumu.", transKun: "Rusten onder de boom." },
-    { id: 15, kanji: "行", onyomi: "コウ", kunyomi: "い(く)", meaning: "Gaan", sentenceOn: "銀行へ行きます。", romajiOn: "Ginkou e ikimasu.", transOn: "Ik ga naar de bank.", sentenceKun: "一緒に行こう。", romajiKun: "Issho ni ikou.", transKun: "Laten we samen gaan." },
-    { id: 16, kanji: "来", onyomi: "ライ", kunyomi: "く(る)", meaning: "Komen", sentenceOn: "来週会いましょう。", romajiOn: "Raishuu aimashou.", transOn: "Laten we volgende week afspreken.", sentenceKun: "友達が来る。", romajiKun: "Tomodachi ga kuru.", transKun: "Er komt een vriend." },
-    { id: 17, kanji: "子", onyomi: "シ", kunyomi: "こ", meaning: "Kind", sentenceOn: "電子メールを送る。", romajiOn: "Denshi meeru o okuru.", transOn: "Een e-mail sturen.", sentenceKun: "あの子は元気だ。", romajiKun: "Ano ko wa genki da.", transKun: "Dat kind is energiek." },
-    { id: 18, kanji: "学", onyomi: "ガク", kunyomi: "まな(ぶ)", meaning: "Leren", sentenceOn: "学校に行きます。", romajiOn: "Gakkou ni ikimasu.", transOn: "Ik ga naar school.", sentenceKun: "言葉を学ぶ。", romajiKun: "Kotoba o manabu.", transKun: "Woorden leren." },
-    { id: 19, kanji: "金", onyomi: "キン", kunyomi: "かね", meaning: "Goud/Geld", sentenceOn: "金メダルを獲る。", romajiOn: "Kin medaru o toru.", transOn: "Een gouden medaille winnen.", sentenceKun: "お金が足りない。", romajiKun: "Okane ga tarinai.", transKun: "Ik heb niet genoeg geld." },
-    { id: 20, kanji: "火", onyomi: "カ", kunyomi: "ひ", meaning: "Vuur", sentenceOn: "火曜日は忙しい。", romajiOn: "Kayoubi wa isogashii.", transOn: "Dinsdag is druk.", sentenceKun: "火をつけます。", romajiKun: "Hi o tsukemasu.", transKun: "Het vuur aansteken." }
-];
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback } = React;
 
-const StartScreen = ({ onSelectMode, activeCount, totalCount, masteredCount }) => (
-    <div className="flex flex-col items-center justify-center min-h-[90vh] px-4 py-10 text-center">
-        <div className="bg-white p-10 rounded-[40px] shadow-2xl border-b-8 border-slate-200 max-w-lg w-full">
-            <div className="text-7xl mb-6 text-center">🏯</div>
-            <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Kanji Master 100</h1>
-            <p className="text-slate-500 mb-10 italic">Cloud-Powered Learning</p>
-            
-            <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Actief</div>
-                    <div className="text-2xl font-black text-venice-green">{activeCount}</div>
-                </div>
-                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                    <div className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest mb-1">Mastery</div>
-                    <div className="text-2xl font-black text-amber-600">{masteredCount}</div>
-                </div>
-            </div>
+        const KANJI_DATA = [
+            { id: 1, kanji: "日", onyomi: "ニチ", kunyomi: "ひ", meaning: "Dag/Zon", sentenceOn: "日曜日は休みです。", romajiOn: "Nichiyoubi wa yasumi desu.", transOn: "Zondag is een vrije dag.", sentenceKun: "日が暮れる。", romajiKun: "Hi ga kureru.", transKun: "De zon gaat onder." },
+            { id: 2, kanji: "一", onyomi: "イチ", kunyomi: "ひと", meaning: "Eén", sentenceOn: "一分待ってください。", romajiOn: "Ippun matte kudasai.", transOn: "Wacht een minuut alstublieft.", sentenceKun: "一つ食べました。", romajiKun: "Hitotsu tabemashita.", transKun: "Ik heb er eentje gegeten." },
+            { id: 3, kanji: "国", onyomi: "コク", kunyomi: "くに", meaning: "Land", sentenceOn: "中国に行きます。", romajiOn: "Chuugoku ni ikimasu.", transOn: "Ik ga naar China.", sentenceKun: "お国はどちらですか？", romajiKun: "Okuni wa dochira desu ka?", transKun: "Uit welk land komt u?" },
+            { id: 4, kanji: "会", onyomi: "カイ", kunyomi: "あ(う)", meaning: "Ontmoeten", sentenceOn: "会議を始めます。", romajiOn: "Kaigi o hajimemasu.", transOn: "We beginnen de vergadering.", sentenceKun: "明日会いましょう。", romajiKun: "Ashita aimashou.", transKun: "Laten we morgen afspreken." },
+            { id: 5, kanji: "人", onyomi: "ジン", kunyomi: "ひと", meaning: "Persoon", sentenceOn: "三人の学生。", romajiOn: "Sannin no gakusei.", transOn: "Drie studenten.", sentenceKun: "あの人は誰ですか？", romajiKun: "Ano hito wa dare desu ka?", transKun: "Wie is die persoon?" },
+            { id: 6, kanji: "大", onyomi: "ダイ", kunyomi: "おお(きい)", meaning: "Groot", sentenceOn: "大事な用事がある。", romajiOn: "Daiji na youji ga aru.", transOn: "Ik heb een belangrijke zaak.", sentenceKun: "大きな声で話す。", romajiKun: "Ookina koe de hanasu.", transKun: "Met een luide stem praten." },
+            { id: 7, kanji: "時", onyomi: "ジ", kunyomi: "とき", meaning: "Tijd", sentenceOn: "何時ですか？", romajiOn: "Nanji desu ka?", transOn: "Hoe laat is het?", sentenceKun: "時々料理をします。", romajiKun: "Tokidoki ryouri o shimasu.", transKun: "Soms kook ik." },
+            { id: 8, kanji: "本", onyomi: "ホン", kunyomi: "もと", meaning: "Boek/Basis", sentenceOn: "日本語を勉強する。", romajiOn: "Nihongo o benkyou suru.", transOn: "Japans studeren.", sentenceKun: "木の本。", romajiKun: "Ki no moto.", transKun: "De voet van de boom." },
+            { id: 9, kanji: "水", onyomi: "スイ", kunyomi: "みず", meaning: "Water", sentenceOn: "水泳が好きです。", romajiOn: "Suiei ga suki desu.", transOn: "Ik hou van zwemmen.", sentenceKun: "冷たい水を飲む。", romajiKun: "Tsumetai mizu o nomu.", transKun: "Koud water drinken." },
+            { id: 10, kanji: "山", onyomi: "サン", kunyomi: "やま", meaning: "Berg", sentenceOn: "火山가 噴火する。", romajiOn: "Kazan ga funka suru.", transOn: "De vulkaan barst uit.", sentenceKun: "山道を行く。", romajiKun: "Yamamichi o iku.", transKun: "Over een bergpad gaan." },
+            { id: 11, kanji: "中", onyomi: "チュウ", kunyomi: "なか", meaning: "Midden/Binnen", sentenceOn: "中学に通う。", romajiOn: "Chuugaku ni kayou.", transOn: "Naar de middenschool gaan.", sentenceKun: "箱の中身は何？", romajiKun: "Hako no nakami wa nani?", transKun: "Wat zit er in de doos?" },
+            { id: 12, kanji: "出", onyomi: "シュツ", kunyomi: "で(る)", meaning: "Uitgaan", sentenceOn: "出席を取ります。", romajiOn: "Shusseki o torimasu.", transOn: "Ik neem de presentie op.", sentenceKun: "部屋を出る。", romajiKun: "Heya o deru.", transKun: "De kamer verlaten." },
+            { id: 13, kanji: "上", onyomi: "ジョウ", kunyomi: "うえ", meaning: "Boven", sentenceOn: "机の上にある。", romajiOn: "Tsukue no ue ni aru.", transOn: "Het ligt op het bureau.", sentenceKun: "坂を上る。", romajiKun: "Saka o noboru.", transKun: "De helling opgaan." },
+            { id: 14, kanji: "下", onyomi: "カ", kunyomi: "した", meaning: "Beneden", sentenceOn: "地下鉄に乗る。", romajiOn: "Chikatetsu ni noru.", transOn: "De metro nemen.", sentenceKun: "木の下で休む。", romajiKun: "Ki no shita de yasumu.", transKun: "Rusten onder de boom." },
+            { id: 15, kanji: "行", onyomi: "コウ", kunyomi: "い(く)", meaning: "Gaan", sentenceOn: "銀行へ行きます。", romajiOn: "Ginkou e ikimasu.", transOn: "Ik ga naar de bank.", sentenceKun: "一緒に行こう。", romajiKun: "Issho ni ikou.", transKun: "Laten we samen gaan." },
+            { id: 16, kanji: "来", onyomi: "ライ", kunyomi: "く(る)", meaning: "Komen", sentenceOn: "来週会いましょう。", romajiOn: "Raishuu aimashou.", transOn: "Laten we volgende week afspreken.", sentenceKun: "友達が来る。", romajiKun: "Tomodachi ga kuru.", transKun: "Er komt een vriend." },
+            { id: 17, kanji: "子", onyomi: "シ", kunyomi: "こ", meaning: "Kind", sentenceOn: "電子メールを送る。", romajiOn: "Denshi meeru o okuru.", transOn: "Een e-mail sturen.", sentenceKun: "あの子は元気だ。", romajiKun: "Ano ko wa genki da.", transKun: "Dat kind is energiek." },
+            { id: 18, kanji: "学", onyomi: "ガク", kunyomi: "まな(ぶ)", meaning: "Leren", sentenceOn: "学校に行きます。", romajiOn: "Gakkou ni ikimasu.", transOn: "Ik ga naar school.", sentenceKun: "言葉を学ぶ。", romajiKun: "Kotoba o manabu.", transKun: "Woorden leren." },
+            { id: 19, kanji: "金", onyomi: "キン", kunyomi: "かね", meaning: "Goud/Geld", sentenceOn: "金メダルを獲る。", romajiOn: "Kin medaru o toru.", transOn: "Een gouden medaille winnen.", sentenceKun: "お金が足りない。", romajiKun: "Okane ga tarinai.", transKun: "Ik heb niet genoeg geld." },
+            { id: 20, kanji: "火", onyomi: "カ", kunyomi: "ひ", meaning: "Vuur", sentenceOn: "火曜日は忙しい。", romajiOn: "Kayoubi wa isogashii.", transOn: "Dinsdag is druk.", sentenceKun: "火をつけます。", romajiKun: "Hi o tsukemasu.", transKun: "Het vuur aansteken." },
+            { id: 21, kanji: "月", onyomi: "ゲツ", kunyomi: "つき", meaning: "Maan/Maand", sentenceOn: "今月は暇です。", romajiOn: "Kongetsu wa hima desu.", transOn: "Deze maand heb ik het rustig.", sentenceKun: "月がきれいです。", romajiKun: "Tsuki ga kirei desu.", transKun: "De maan is mooi." },
+            { id: 22, kanji: "二", onyomi: "ニ", kunyomi: "ふた", meaning: "Twee", sentenceOn: "二階へ行こう。", romajiOn: "Nikai e ikou.", transOn: "Laten we naar de tweede verdieping gaan.", sentenceKun: "二つください。", romajiKun: "Futatsu kudasai.", transKun: "Geef er me er alstublieft twee." },
+            { id: 23, kanji: "三", onyomi: "サン", kunyomi: "み", meaning: "Drie", sentenceOn: "三月は春です。", romajiOn: "Sangetsu wa haru desu.", transOn: "Maart is lente.", sentenceKun: "三日待ちました。", romajiKun: "Mikka machimashita.", transKun: "Ik heb drie dagen gewacht." },
+            { id: 24, kanji: "四", onyomi: "シ", kunyomi: "よ", meaning: "Vier", sentenceOn: "四月は新しい学期。", romajiOn: "Shigatsu wa atarashii gakki.", transOn: "April is een nieuw schoolsemester.", sentenceKun: "四つあります。", romajiKun: "Yottsu arimasu.", transKun: "Er zijn er vier." },
+            { id: 25, kanji: "五", onyomi: "ゴ", kunyomi: "いつ", meaning: "Vijf", sentenceOn: "五円を拾った。", romajiOn: "Go-en o hirotta.", transOn: "Ik heb vijf yen gevonden.", sentenceKun: "五日後に会おう。", romajiKun: "Itsuka go ni aou.", transKun: "Laten we over vijf dagen afspreken." },
+            { id: 26, kanji: "六", onyomi: "ロク", kunyomi: "む", meaning: "Zes", sentenceOn: "六ヶ月間勉強した。", romajiOn: "Rokkagetsukan benkyou shita.", transOn: "Ik heb zes maanden gestudeerd.", sentenceKun: "六つ買いました。", romajiKun: "Muttsu kaimashita.", transKun: "Ik heb er zes gekocht." },
+            { id: 27, kanji: "七", onyomi: "シチ", kunyomi: "なな", meaning: "Zeven", sentenceOn: "七時に起きる。", romajiOn: "Shichiji ni okiru.", transOn: "Ik sta om zeven uur op.", sentenceKun: "七つの海。", romajiKun: "Nanatsu no umi.", transKun: "De zeven zeeën." },
+            { id: 28, kanji: "八", onyomi: "ハチ", kunyomi: "や", meaning: "Acht", sentenceOn: "八百屋で野菜を買う。", romajiOn: "Yaoya de yasai o kau.", transOn: "Groenten kopen bij de groenteboer.", sentenceKun: "八つあります。", romajiKun: "Yattsu arimasu.", transKun: "Er zijn er acht." },
+            { id: 29, kanji: "九", onyomi: "キュウ", kunyomi: "ここの", meaning: "Negen", sentenceOn: "九月は涼しい。", romajiOn: "Kugatsu wa suzushii.", transOn: "September is koel.", sentenceKun: "九つ並んでいる。", romajiKun: "Kokonotsu narande iru.", transKun: "Er staan er negen op een rij." },
+            { id: 30, kanji: "十", onyomi: "ジュウ", kunyomi: "とお", meaning: "Tien", sentenceOn: "十分に注意して。", romajiOn: "Juubun ni chuui shite.", transOn: "Wees zeer voorzichtig.", sentenceKun: "十日働いた。", romajiKun: "Tooka hataraika.", transKun: "Ik heb tien dagen gewerkt." },
+            { id: 31, kanji: "百", onyomi: "ヒャク", kunyomi: "もも", meaning: "Honderd", sentenceOn: "百科事典を引く。", romajiOn: "Hyakkajiten o hiku.", transOn: "Een encyclopedie raadplegen.", sentenceKun: "百人一首。", romajiKun: "Hyakunin Isshu.", transKun: "De Honderd Gedichten." },
+            { id: 32, kanji: "千", onyomi: "セン", kunyomi: "ち", meaning: "Duizend", sentenceOn: "千葉県に住んでいる。", romajiOn: "Chiba-ken ni sunde iru.", transOn: "Ik woon in de Chiba prefectuur.", sentenceKun: "千の風になって。", romajiKun: "Sen no kaze ni natte.", transKun: "Zoals duizend winden." },
+            { id: 33, kanji: "万", onyomi: "マン", kunyomi: "よろず", meaning: "Tienduizend", sentenceOn: "一万円札。", romajiOn: "Ichiman-ensatsu.", transOn: "Een biljet van tienduizend yen.", sentenceKun: "万歳を三唱する。", romajiKun: "Banzai o sanshou suru.", transKun: "Drie keer 'banzai' roepen." },
+            { id: 34, kanji: "円", onyomi: "エン", kunyomi: "まる", meaning: "Yen/Cirkel", sentenceOn: "円を描く。", romajiOn: "En o kaku.", transOn: "Een cirkel tekenen.", sentenceKun: "丸い形ですね。", romajiKun: "Marui katachi desu ne.", transKun: "Dat is een ronde vorm, hè?" },
+            { id: 35, kanji: "木", onyomi: "モク", kunyomi: "き", meaning: "Boom", sentenceOn: "木曜日は暇だ。", romajiOn: "Mokuyoubi wa hima da.", transOn: "Donderdag heb ik tijd.", sentenceKun: "大きな木の下で。", romajiKun: "Ookina ki no shita de.", transKun: "Onder een grote boom." },
+            { id: 36, kanji: "田", onyomi: "デン", kunyomi: "た", meaning: "Rijstveld", sentenceOn: "水田を耕す。", romajiOn: "Suiden o tagayasu.", transOn: "Het rijstveld bewerken.", sentenceKun: "田舎に住みたい。", romajiKun: "Inaka ni sumitai.", transKun: "Ik wil op het platteland wonen." },
+            { id: 37, kanji: "土", onyomi: "ド", kunyomi: "つち", meaning: "Grond", sentenceOn: "土曜日に行こう。", romajiOn: "Doyoubi ni ikou.", transOn: "Laten we zaterdag gaan.", sentenceKun: "土を掘る。", romajiKun: "Tsuchi o horu.", transKun: "In de grond graven." },
+            { id: 38, kanji: "天", onyomi: "テン", kunyomi: "あま", meaning: "Hemel", sentenceOn: "天気予報を見る。", romajiOn: "Tenki yohou o miru.", transOn: "Het weerbericht kijken.", sentenceKun: "天の川を見る。", romajiKun: "Amanogawa o miru.", transKun: "De Melkweg bekijken." },
+            { id: 39, kanji: "気", onyomi: "キ", kunyomi: "いき", meaning: "Energie", sentenceOn: "気をつけてね。", romajiOn: "Ki o tsukete ne.", transOn: "Pas goed op jezelf.", sentenceKun: "気持ちがいい。", romajiKun: "Kimochi ga ii.", transKun: "Dat voelt goed." },
+            { id: 40, kanji: "雨", onyomi: "ウ", kunyomi: "あめ", meaning: "Regen", sentenceOn: "大雨に降られた。", romajiOn: "Ooame ni furareta.", transOn: "Ik kwam in een zware regenbui.", sentenceKun: "雨が止みました。", romajiKun: "Ame ga yamimashita.", transKun: "De regen is gestopt." },
+            { id: 41, kanji: "花", onyomi: "カ", kunyomi: "はな", meaning: "Bloem", sentenceOn: "花火大会に行く。", romajiOn: "Hanabi taikai ni iku.", transOn: "Naar een vuurwerkshow gaan.", sentenceKun: "花を生ける。", romajiKun: "Hana o ikeru.", transKun: "Bloemen schikken." },
+            { id: 42, kanji: "海", onyomi: "カイ", kunyomi: "うみ", meaning: "Zee", sentenceOn: "海外旅行に行きたい。", romajiOn: "Kaigai ryokou ni ikitai.", transOn: "Ik wil op reis naar het buitenland.", sentenceKun: "海で泳ごう。", romajiKun: "Umi de oyogou.", transKun: "Laten we in zee zwemmen." },
+            { id: 43, kanji: "風", onyomi: "フウ", kunyomi: "かぜ", meaning: "Wind", sentenceOn: "和風の部屋。", romajiOn: "Wafuu no heya.", transOn: "Een kamer in Japanse stijl.", sentenceKun: "風が吹いている。", romajiKun: "Kaze ga fuite iru.", transKun: "De wind waait." },
+            { id: 44, kanji: "年", onyomi: "ネン", kunyomi: "とし", meaning: "Jaar", sentenceOn: "一年間待った。", romajiOn: "Ichinenkan matta.", transOn: "Ik heb een jaar gewacht.", sentenceKun: "お年玉をもらう。", romajiKun: "Otoshidama o morau.", transKun: "Geldcadeau voor nieuwjaar krijgen." },
+            { id: 45, kanji: "午", onyomi: "ゴ", kunyomi: "うま", meaning: "Middag", sentenceOn: "午前中に掃除する。", romajiOn: "Gozenchuu ni souji suru.", transOn: "Schoonmaken in de ochtend.", sentenceKun: "正午に会おう。", romajiKun: "Shougo ni aou.", transKun: "Laten we om 12 uur middag afspreken." },
+            { id: 46, kanji: "前", onyomi: "ゼン", kunyomi: "まえ", meaning: "Voor", sentenceOn: "名前を書いて。", romajiOn: "Namae o kaite.", transOn: "Schrijf je naam alstublieft.", sentenceKun: "駅の前で待つ。", romajiKun: "Eki no mae de matsu.", transKun: "Wachten voor het station." },
+            { id: 47, kanji: "後", onyomi: "ゴ", kunyomi: "あと", meaning: "Achter/Na", sentenceOn: "午後は忙しい。", romajiOn: "Gogo wa isogashii.", transOn: "In de middag heb ik het druk.", sentenceKun: "後ろに誰かいる。", romajiKun: "Ushiro ni dareka iku.", transKun: "Er staat iemand achter je." },
+            { id: 48, kanji: "今", onyomi: "コン", kunyomi: "いま", meaning: "Nu", sentenceOn: "今日はお祭りだ。", romajiOn: "Kyou wa omatsuri da.", transOn: "Vandaag is er een festival.", sentenceKun: "今何時ですか？", romajiKun: "Ima nanji desu ka?", transKun: "Hoe laat is het nu?" },
+            { id: 49, kanji: "週", onyomi: "シュウ", kunyomi: "まわり", meaning: "Week", sentenceOn: "毎週、泳ぎます。", romajiOn: "Maishuu, oyogimasu.", transOn: "Ik zwem elke week.", sentenceKun: "週末に遊ぼう。", romajiKun: "Shuumatsu ni asobou.", transKun: "Laten we in het weekend afspreken." },
+            { id: 50, kanji: "間", onyomi: "カン", kunyomi: "なか", meaning: "Tussen", sentenceOn: "一時間かかる。", romajiOn: "Ichijikan kakaru.", transOn: "Het duurt één uur.", sentenceKun: "二人の間にある。", romajiKun: "Futari no aida ni aru.", transKun: "Het ligt tussen hen tweeën in." },
+            { id: 51, kanji: "先", onyomi: "セン", kunyomi: "さき", meaning: "Eerder", sentenceOn: "先生に聞こう。", romajiOn: "Sensei ni kikou.", transOn: "Laten we het aan de leraar vragen.", sentenceKun: "お先にどうぞ。", romajiKun: "Osaki ni douzo.", transKun: "Gaat u maar voor." },
+            { id: 52, kanji: "毎", onyomi: "マイ", kunyomi: "ごと", meaning: "Elke", sentenceOn: "毎日練習する。", romajiOn: "Mainichi renshuu suru.", transOn: "Elke dag oefenen.", sentenceKun: "事ごとに感謝する。", romajiKun: "Koto-goto ni kansha suru.", transKun: "Voor alles dankbaar zijn." },
+            { id: 53, kanji: "左", onyomi: "サ", kunyomi: "ひだり", meaning: "Links", sentenceOn: "左折してください。", romajiOn: "Sasetsu shite kudasai.", transOn: "Sla linksaf alstublieft.", sentenceKun: "左手を使って。", romajiKun: "Hidarite o tsukatte.", transKun: "Gebruik je linkerhand." },
+            { id: 54, kanji: "右", onyomi: "ユウ", kunyomi: "みぎ", meaning: "Rechts", sentenceOn: "右側にあります。", romajiOn: "Migigawa ni arimasu.", transOn: "Het bevindt zich aan de rechterkant.", sentenceKun: "右を見て、左を見て。", romajiKun: "Migi o mite, hidari o mite.", transKun: "Kijk naar rechts en dan naar links." },
+            { id: 55, kanji: "東", onyomi: "トウ", kunyomi: "ひがし", meaning: "Oost", sentenceOn: "東京に行きたい。", romajiOn: "Toukyou ni ikitai.", transOn: "Ik wil naar Tokyo gaan.", sentenceKun: "東の方から来た。", romajiKun: "Higashi no hou kara kita.", transKun: "Ik kwam uit de richting van het oosten." },
+            { id: 56, kanji: "西", onyomi: "セイ", kunyomi: "にし", meaning: "West", sentenceOn: "西洋の文化。", romajiOn: "Seiyou no bunka.", transOn: "Westerse cultuur.", sentenceKun: "西に日が沈む。", romajiKun: "Nishi ni hi ga shizumu.", transKun: "De zon gaat onder in het westen." },
+            { id: 57, kanji: "南", onyomi: "ナン", kunyomi: "みなみ", meaning: "Zuid", sentenceOn: "東南アジア旅行。", romajiOn: "Tounan-ajia ryokou.", transOn: "Reis door Zuidoost-Azië.", sentenceKun: "南の島で休む。", romajiKun: "Minami no shima de yasumu.", transKun: "Uitrusten op een zuidelijk eiland." },
+            { id: 58, kanji: "北", onyomi: "ホク", kunyomi: "きた", meaning: "Noord", sentenceOn: "北海道は寒い。", romajiOn: "Hokkaido wa samui.", transOn: "Hokkaido is koud.", sentenceKun: "北風が吹く。", romajiKun: "Kitakaze ga fuku.", transKun: "Er waait een noorderwind." },
+            { id: 59, kanji: "方", onyomi: "ホウ", kunyomi: "かた", meaning: "Richting", sentenceOn: "方法を教える。", romajiOn: "Houhou o oshieru.", transOn: "De methode uitleggen.", sentenceKun: "あの方は誰？", romajiKun: "Ano kata wa dare?", transKun: "Wie is die persoon (beleefd)?" },
+            { id: 60, kanji: "外", onyomi: "ガイ", kunyomi: "そと", meaning: "Buiten", sentenceOn: "外国語を学ぶ。", romajiOn: "Gaikokugo o manabu.", transOn: "Een vreemde taal leren.", sentenceKun: "外で遊びましょう。", romajiKun: "Soto de asobimashou.", transKun: "Laten we buiten spelen." },
+            { id: 61, kanji: "見", onyomi: "ケン", kunyomi: "み(る)", meaning: "Zien", sentenceOn: "見学に行こう。", romajiOn: "Kengaku ni ikou.", transOn: "Laten we op excursie gaan.", sentenceKun: "映画を見たい。", romajiKun: "Eiga o mitai.", transKun: "Ik wil een film zien." },
+            { id: 62, kanji: "言", onyomi: "ゲン", kunyomi: "い(う)", meaning: "Zeggen", sentenceOn: "言語を研究する。", romajiOn: "Gengo o kenkyuu suru.", transOn: "Taal onderzoeken.", sentenceKun: "本当のことを言って。", romajiKun: "Hontou no koto o itte.", transKun: "Vertel me de waarheid." },
+            { id: 63, kanji: "読", onyomi: "ドク", kunyomi: "よ(む)", meaning: "Lezen", sentenceOn: "読書が好きです。", romajiOn: "Dokusho ga suki desu.", transOn: "Ik hou van lezen.", sentenceKun: "本を読んでいます。", romajiKun: "Hon o yonde imasu.", transKun: "Ik ben een boek aan het lezen." },
+            { id: 64, kanji: "書", onyomi: "ショ", kunyomi: "か(く)", meaning: "Schrijven", sentenceOn: "図書館へ行く。", romajiOn: "Toshokan e iku.", transOn: "Naar de bibliotheek gaan.", sentenceKun: "手紙を書いた。", romajiKun: "Tegami o kaita.", transKun: "Ik heb een brief geschreven." },
+            { id: 65, kanji: "聞", onyomi: "ブン", kunyomi: "き(く)", meaning: "Horen/Vragen", sentenceOn: "新聞を読みます。", romajiOn: "Shinbun o yomimasu.", transOn: "De krant lezen.", sentenceKun: "音楽を聞こう。", romajiKun: "Ongaku o kikou.", transKun: "Laten we naar muziek luisteren." },
+            { id: 66, kanji: "買", onyomi: "バイ", kunyomi: "か(う)", meaning: "Kopen", sentenceOn: "売買を契約する。", romajiOn: "Baibai o keiyaku suru.", transOn: "Een koopcontract sluiten.", sentenceKun: "靴を買いました。", romajiKun: "Kutsu o kaimashita.", transKun: "Ik heb schoenen gekocht." },
+            { id: 67, kanji: "食", onyomi: "ショク", kunyomi: "た(べる)", meaning: "Eten", sentenceOn: "食堂で食べる。", romajiOn: "Shokudou de taberu.", transOn: "In de kantine eten.", sentenceKun: "晩ご飯を食べた？", romajiKun: "Bangohan o tabeta?", transKun: "Heb je al avondeten gehad?" },
+            { id: 68, kanji: "飲", onyomi: "イン", kunyomi: "の(む)", meaning: "Drinken", sentenceOn: "飲み物は何？", romajiOn: "Nomimono wa nani?", transOn: "Wat is er te drinken?", sentenceKun: "お茶を飲みます。", romajiKun: "Ocha o nomimasu.", transKun: "Thee drinken." },
+            { id: 69, kanji: "立", onyomi: "リツ", kunyomi: "た(つ)", meaning: "Staan", sentenceOn: "国立公園に行く。", romajiOn: "Kokuritsu kouen ni iku.", transOn: "Naar een nationaal park gaan.", sentenceKun: "そこに立たないで。", romajiKun: "Soko ni tatanaide.", transKun: "Sta daar niet alstublieft." },
+            { id: 70, kanji: "休", onyomi: "キュウ", kunyomi: "やす(む)", meaning: "Rusten", sentenceOn: "連休가 楽しみだ。", romajiOn: "Renkyuu ga tanoshimi da.", transOn: "Ik kijk uit naar het lange weekend.", sentenceKun: "少し休みましょう。", romajiKun: "Sukoshi yasumimashou.", transKun: "Laten we even rusten." },
+            { id: 71, kanji: "少", onyomi: "ショウ", kunyomi: "すく(ない)", meaning: "Weinig", sentenceOn: "少年が走っている。", romajiOn: "Shounen ga hashitte iru.", transOn: "Een jongen is aan het rennen.", sentenceKun: "砂糖を少し入れる。", romajiKun: "Satou o sukoshi ireru.", transKun: "Een beetje suiker toevoegen." },
+            { id: 72, kanji: "多", onyomi: "タ", kunyomi: "おお(い)", meaning: "Veel", sentenceOn: "多分、大丈夫です。", romajiOn: "Tabun, daijoubu desu.", transOn: "Het is waarschijnlijk oké.", sentenceKun: "人が多いですね。", romajiKun: "Hito ga ooi desu ne.", transKun: "Er zijn veel mensen, hè?" },
+            { id: 73, kanji: "男", onyomi: "ダン", kunyomi: "おとこ", meaning: "Man", sentenceOn: "男子トイレはこちら。", romajiOn: "Danshi toire wa kochira.", transOn: "Het herentoilet is deze kant op.", sentenceKun: "男の子が泣いた。", romajiKun: "Otokonoko ga naita.", transKun: "Het jongetje huilde." },
+            { id: 74, kanji: "女", onyomi: "ジョ", kunyomi: "おんな", meaning: "Vrouw", sentenceOn: "女性の歌手。", romajiOn: "Josei no kashu.", transOn: "Een zangeres.", sentenceKun: "女の子に会った。", romajiKun: "Onnanoko ni atta.", transKun: "Ik heb een meisje ontmoet." },
+            { id: 75, kanji: "父", onyomi: "フ", kunyomi: "ちち", meaning: "Vader", sentenceOn: "祖父は元気です。", romajiOn: "Sofu wa genki desu.", transOn: "Mijn opa is gezond.", sentenceKun: "父は会社員です。", romajiKun: "Chichi wa kaishain desu.", transKun: "Mijn vader is een kantoormedewerker." },
+            { id: 76, kanji: "母", onyomi: "ボ", kunyomi: "はは", meaning: "Moeder", sentenceOn: "母国語で話す。", romajiOn: "Bokokugo de hanasu.", transOn: "In je moedertaal spreken.", sentenceKun: "母の料理は最高だ。", romajiKun: "Haha no ryouri wa saikou da.", transKun: "Mijn moeders koken is het beste." },
+            { id: 77, kanji: "友", onyomi: "ユウ", kunyomi: "とも", meaning: "Vriend", sentenceOn: "親友に相談する。", romajiOn: "Shinyuu ni soudan suru.", transOn: "Overleggen met een beste vriend.", sentenceKun: "友達と遊ぶ。", romajiKun: "Tomodachi to asobu.", transKun: "Met vrienden spelen." },
+            { id: 78, kanji: "好", onyomi: "コウ", kunyomi: "す(き)", meaning: "Leuk vinden", sentenceOn: "好物は何ですか？", romajiOn: "Koubutsu wa nani desu ka?", transOn: "Wat is je lievelingseten?", sentenceKun: "お寿司が好きです。", romajiKun: "Osushi ga suki desu.", transKun: "Ik hou van sushi." },
+            { id: 79, kanji: "小", onyomi: "ショウ", kunyomi: "ちい(さい)", meaning: "Klein", sentenceOn: "小学校に通う。", romajiOn: "Shougakkou ni kayou.", transOn: "Ik ga naar de basisschool.", sentenceKun: "小さな夢がある。", romajiKun: "Chiisana yume ga aru.", transKun: "Ik heb een kleine droom." },
+            { id: 80, kanji: "長", onyomi: "チョウ", kunyomi: "なが(い)", meaning: "Lang", sentenceOn: "校長先生の話。", romajiOn: "Kouchousensei no hanashi.", transOn: "De toespraak van de directeur.", sentenceKun: "足が長いですね。", romajiKun: "Ashi ga nagai desu ne.", transKun: "Je hebt lange benen, hè?" },
+            { id: 81, kanji: "高", onyomi: "コウ", kunyomi: "たか(い)", meaning: "Hoog/Duur", sentenceOn: "高校生になった。", romajiOn: "Koukousei ni natta.", transOn: "Ik ben een middelbare scholier geworden.", sentenceKun: "この本は高いです。", romajiKun: "Kono hon wa takai desu.", transKun: "Dit boek is duur." },
+            { id: 82, kanji: "安", onyomi: "アン", kunyomi: "やす(い)", meaning: "Goedkoop", sentenceOn: "安全に運転して。", romajiOn: "Anzen ni unten shite.", transOn: "Rij veilig alstublieft.", sentenceKun: "安い服を買う。", romajiKun: "Yasui fuku o kau.", transKun: "Goedkope kleding kopen." },
+            { id: 83, kanji: "新", onyomi: "シン", kunyomi: "あたら(しい)", meaning: "Nieuw", sentenceOn: "新聞を読みました。", romajiOn: "Shinbun o yomimashita.", transOn: "Ik heb de krant gelezen.", sentenceKun: "新しい靴です。", romajiKun: "Atarashii kutsu desu.", transKun: "Het zijn nieuwe schoenen." },
+            { id: 84, kanji: "古", onyomi: "コ", kunyomi: "ふる(い)", meaning: "Oud", sentenceOn: "中古車を買う。", romajiOn: "Chuukosha o kau.", transOn: "Een tweedehands auto kopen.", sentenceKun: "古い建物ですね。", romajiKun: "Furui tatemono desu ne.", transKun: "Het is een oud gebouw, hè?" },
+            { id: 85, kanji: "白", onyomi: "ハク", kunyomi: "しろ", meaning: "Wit", sentenceOn: "白鳥가 泳いでいる。", romajiOn: "Hakuchou ga oyoide iru.", transOn: "Er zwemt een zwaan.", sentenceKun: "白いシャツを着る。", romajiKun: "Shiroi shatsu o kiru.", transKun: "Een wit shirt dragen." },
+            { id: 86, kanji: "店", onyomi: "テン", kunyomi: "みせ", meaning: "Winkel", sentenceOn: "店員に聞こう。", romajiOn: "Ten-in ni kikou.", transOn: "Laten we het aan de winkelbediende vragen.", sentenceKun: "あの店は有名だ。", romajiKun: "Ano mise wa yuumei da.", transKun: "Die winkel is beroemd." },
+            { id: 87, kanji: "駅", onyomi: "エキ", kunyomi: "えき", meaning: "Station", sentenceOn: "駅員を呼ぶ。", romajiOn: "Eki-in o yobu.", transOn: "De stationsmedewerker roepen.", sentenceKun: "駅まで歩こう。", romajiKun: "Eki made arukou.", transKun: "Laten we naar het station lopen." },
+            { id: 88, kanji: "電", onyomi: "デン", kunyomi: "いなずま", meaning: "Elektriciteit", sentenceOn: "電車に乗ります。", romajiOn: "Densha ni norimasu.", transOn: "Ik stap in de trein.", sentenceKun: "電話をかけて。", romajiKun: "Denwa o kakete.", transKun: "Bel me even alstublieft." },
+            { id: 89, kanji: "車", onyomi: "シャ", kunyomi: "くるま", meaning: "Auto", sentenceOn: "自転車で行く。", romajiOn: "Jitensha de iku.", transOn: "Met de fiets gaan.", sentenceKun: "新しい車が欲しい。", romajiKun: "Atarashii kuruma ga hoshii.", transKun: "Ik wil een nieuwe auto." },
+            { id: 90, kanji: "道", onyomi: "ドウ", kunyomi: "みち", meaning: "Weg", sentenceOn: "書道を習う。", romajiOn: "Shodou o narau.", transOn: "Kalligrafie leren.", sentenceKun: "道を教えて。", romajiKun: "Michi o oshiete.", transKun: "Wijs me de weg alstublieft." },
+            { id: 91, kanji: "社", onyomi: "シャ", kunyomi: "やしろ", meaning: "Bedrijf", sentenceOn: "会社員です。", romajiOn: "Kaishain desu.", transOn: "Ik ben een kantoormedewerker.", sentenceKun: "神社でお参りする。", romajiKun: "Jinja de omairi suru.", transKun: "Bidden bij een schrijn." },
+            { id: 92, kanji: "校", onyomi: "コウ", kunyomi: "かせ", meaning: "School", sentenceOn: "校舎を建てる。", romajiOn: "Kousha o tateru.", transOn: "Een schoolgebouw bouwen.", sentenceKun: "学校を休みます。", romajiKun: "Gakkou o yasumimasu.", transKun: "Ik ben vrij van school." },
+            { id: 93, kanji: "語", onyomi: "ゴ", kunyomi: "かた(る)", meaning: "Taal", sentenceOn: "英語を話せますか？", romajiOn: "Eigo o hanasemasu ka?", transOn: "Kunt u Engels spreken?", sentenceKun: "物語を読む。", romajiKun: "Monogatari o yomu.", transKun: "Een verhaal lezen." },
+            { id: 94, kanji: "何", onyomi: "カ", kunyomi: "なに", meaning: "Wat", sentenceOn: "幾何学の授業。", romajiOn: "Kikagaku no jugyou.", transOn: "Meetkundeles.", sentenceKun: "何を食べたい？", romajiKun: "Nani o tabetai?", transKun: "Wat wil je eten?" },
+            { id: 95, kanji: "名", onyomi: "メイ", kunyomi: "な", meaning: "Naam", sentenceOn: "有名な料理店。", romajiOn: "Yuumei na ryouriten.", transOn: "Een beroemd restaurant.", sentenceKun: "名前を教えて。", romajiKun: "Namae o oshiete.", transKun: "Vertel me je naam alstublieft." },
+            { id: 96, kanji: "手", onyomi: "シュ", kunyomi: "て", meaning: "Hand", sentenceOn: "運転手さん。", romajiOn: "Untenshu-san.", transOn: "De chauffeur.", sentenceKun: "手を洗って。", romajiKun: "Te o aratte.", transKun: "Was je handen alstublieft." },
+            { id: 97, kanji: "足", onyomi: "ソク", kunyomi: "あし", meaning: "Voet/Been", sentenceOn: "遠足に行く。", romajiOn: "Ensoku ni iku.", transOn: "Op schoolreis gaan.", sentenceKun: "足が痛いです。", romajiKun: "Ashi ga itai desu.", transKun: "Mijn benen doen pijn." },
+            { id: 98, kanji: "目", onyomi: "モク", kunyomi: "め", meaning: "Oog", sentenceOn: "目的を忘れないで。", romajiOn: "Mokuteki o wasurenaide.", transOn: "Vergeet je doel niet.", sentenceKun: "目がきれいです。", romajiKun: "Me ga kirei desu.", transKun: "Je hebt mooie ogen." },
+            { id: 99, kanji: "口", onyomi: "コウ", kunyomi: "くち", meaning: "Mond", sentenceOn: "人口が増えている。", romajiOn: "Jinkou ga fuete iru.", transOn: "De bevolking groeit.", sentenceKun: "入口はどこですか？", romajiKun: "Iriguchi wa dochira desu ka?", transKun: "Waar is de ingang?" },
+            { id: 100, kanji: "心", onyomi: "シン", kunyomi: "こころ", meaning: "Hart/Geest", sentenceOn: "心理学の本。", romajiOn: "Shinrigaku no hon.", transOn: "Een psychologieboek.", sentenceKun: "心が落ち着く。", romajiKun: "Kokoro ga ochitsuku.", transKun: "Mijn geest komt tot rust." }
+        ];
 
-            <div className="space-y-4">
-                <button onClick={() => onSelectMode('learn')} className="w-full bg-[#055D49] hover:bg-[#044a3a] text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group">
-                    <div className="flex items-center gap-4 text-left">
-                        <BookOpen />
-                        <div>
-                            <div className="text-lg">Leer-modus</div>
-                            <div className="text-xs opacity-60 font-normal">Bestudeer actieve set</div>
-                        </div>
-                    </div>
-                    <ChevronRight />
-                </button>
-                <button onClick={() => onSelectMode('match')} className="w-full bg-[#D48166] hover:bg-[#c07259] text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group">
-                    <div className="flex items-center gap-4 text-left">
-                        <Layers />
-                        <div>
-                            <div className="text-lg">Triple Matching</div>
-                            <div className="text-xs opacity-60 font-normal">Test je kennis</div>
-                        </div>
-                    </div>
-                    <ChevronRight />
-                </button>
-                <button onClick={() => onSelectMode('mastery')} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group border-b-4 border-slate-700">
-                    <div className="flex items-center gap-4 text-left">
-                        <Award className="text-amber-400" />
-                        <div>
-                            <div className="text-lg">Kanji Mastery</div>
-                            <div className="text-xs opacity-60 font-normal">Bekijk je successen</div>
-                        </div>
-                    </div>
-                    <ChevronRight />
-                </button>
-            </div>
-        </div>
-    </div>
-);
+        const STORAGE_KEY = 'kanji_master_100_v1';
 
-const MasteryMode = ({ onBack, data, onRestore }) => {
-    const [search, setSearch] = useState("");
-    const filtered = useMemo(() => data.filter(k => k.kanji.includes(search) || k.meaning.toLowerCase().includes(search.toLowerCase())), [search, data]);
-
-    return (
-        <div className="min-h-screen pb-20">
-            <header className="bg-slate-900 text-white py-12 px-6 shadow-2xl mb-12 rounded-b-[60px] border-b-8 border-amber-500/30">
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-6">
-                        <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all"><Home size={24} /></button>
-                        <div>
-                            <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-3">
-                                <Award className="text-amber-400" size={32} /> Kanji Mastery
-                            </h1>
-                            <p className="text-white/60 text-[10px] font-bold tracking-widest mt-1">{data.length} KANJI BEHEERST</p>
-                        </div>
-                    </div>
-                    <div className="relative w-full md:w-64 text-slate-800">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
-                        <input type="text" placeholder="Zoek in archief..." className="w-full bg-white/10 border-none rounded-2xl py-4 pl-12 pr-6 text-white placeholder-white/30 focus:bg-white/20 transition-all outline-none" value={search} onChange={(e) => setSearch(e.target.value)} />
-                    </div>
-                </div>
-            </header>
-
-            <main className="max-w-6xl mx-auto px-6">
-                {filtered.length === 0 ? (
-                    <div className="text-center py-24 bg-white rounded-[40px] border-4 border-dashed border-slate-200 shadow-sm">
-                        <Award className="mx-auto text-slate-200 mb-6" size={80} />
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Nog geen gearchiveerde kanji</p>
-                        <button onClick={onBack} className="mt-6 text-[#055D49] font-black text-xs uppercase tracking-widest hover:underline">Ga naar Leer-modus</button>
-                    </div>
-                ) : (
-                    <div className="space-y-6">
-                        {filtered.map(item => (
-                            <div key={item.id} className="relative flex flex-col md:flex-row gap-6 p-6 bg-white rounded-[32px] border-b-4 border-amber-100 group transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-2">
-                                <button 
-                                    onClick={() => onRestore(item.id)} 
-                                    className="absolute top-4 right-4 p-3 rounded-2xl bg-slate-50 text-slate-300 hover:text-[#055D49] hover:bg-[#055D49]/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest shadow-sm"
-                                    title="Zet terug naar de leerlijst"
-                                >
-                                    <RotateCcw size={16} />
-                                    <span className="hidden group-hover:inline">Herstel</span>
-                                </button>
-                                
-                                <div className="flex items-center gap-6 md:w-1/4">
-                                    <div className="text-5xl font-black bg-amber-50 w-20 h-20 flex items-center justify-center rounded-[24px] kanji-font text-slate-800 shadow-inner border border-amber-100/50">
-                                        {item.kanji}
-                                    </div>
-                                    <div>
-                                        <div className="font-black text-[9px] uppercase text-slate-400 tracking-widest mb-0.5">Betekenis</div>
-                                        <div className="text-xl font-black text-slate-900 leading-tight">{item.meaning}</div>
-                                        <div className="flex gap-2 mt-1">
-                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">On: {item.onyomi}</span>
-                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Kun: {item.kunyomi}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="text-[11px] bg-[#00d5a0] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 p-1.5 bg-black/10 text-[7px] font-black uppercase tracking-tighter rounded-bl-lg text-center">Onyomi Context</div>
-                                        <p className="font-black mb-1 text-sm kanji-font">{item.sentenceOn}</p>
-                                        <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiOn}</p>
-                                        <p className="font-bold border-t border-white/20 pt-1.5 mt-1">{item.transOn}</p>
-                                    </div>
-                                    <div className="text-[11px] bg-[#ffb347] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 p-1.5 bg-black/10 text-[7px] font-black uppercase tracking-tighter rounded-bl-lg text-center">Kunyomi Context</div>
-                                        <p className="font-black mb-1 text-sm kanji-font">{item.sentenceKun}</p>
-                                        <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiKun}</p>
-                                        <p className="font-bold border-t border-white/20 pt-1.5 mt-1">{item.transKun}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </main>
-        </div>
-    );
-};
-
-const MatchGame = ({ onBack, data, onArchive, archivedIds }) => {
-    const [gameSize, setGameSize] = useState(5);
-    const [cards, setCards] = useState([]);
-    const [selected, setSelected] = useState([]);
-    const [matchedIds, setMatchedIds] = useState([]);
-    const [history, setHistory] = useState([]);
-    const [isPlaying, setIsPlaying] = useState(false);
-
-    const initGame = useCallback(() => {
-        const count = Math.min(gameSize, data.length);
-        const shuffled = [...data].sort(() => 0.5 - Math.random()).slice(0, count);
-        const gameCards = [];
-        shuffled.forEach(item => {
-            gameCards.push({ 
-                id: `k-${item.id}`, 
-                kanjiId: item.id, 
-                type: 'kanji', 
-                content: item.kanji,
-                onyomi: item.onyomi,
-                kunyomi: item.kunyomi
-            });
-            gameCards.push({ id: `on-${item.id}`, kanjiId: item.id, type: 'onyomi', sentence: item.sentenceOn, romaji: item.romajiOn, trans: item.transOn });
-            gameCards.push({ id: `kun-${item.id}`, kanjiId: item.id, type: 'kunyomi', sentence: item.sentenceKun, romaji: item.romajiKun, trans: item.transKun });
-        });
-        setCards(gameCards.sort(() => 0.5 - Math.random()));
-        setMatchedIds([]);
-        setHistory([]);
-        setSelected([]);
-        setIsPlaying(true);
-    }, [gameSize, data]);
-
-    useEffect(() => {
-        if (selected.length === 3) {
-            const [c1, c2, c3] = selected;
-            if (c1.kanjiId === c2.kanjiId && c2.kanjiId === c3.kanjiId && new Set([c1.type, c2.type, c3.type]).size === 3) {
-                setTimeout(() => {
-                    const kanjiId = c1.kanjiId;
-                    setMatchedIds(prev => [...prev, kanjiId]);
-                    setHistory(prev => [data.find(k => k.id === kanjiId), ...prev]);
-                    setSelected([]);
-                }, 500);
-            } else {
-                setTimeout(() => setSelected([]), 1000);
-            }
-        }
-    }, [selected, data]);
-
-    if (!isPlaying) {
-        return (
-            <div className="max-w-md mx-auto py-20 px-4 text-center">
-                <button onClick={onBack} className="mb-8 text-slate-500 flex items-center gap-2 mx-auto font-bold uppercase text-xs tracking-widest hover:text-slate-800 transition-colors"><Home size={16} /> Home</button>
-                <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-slate-200">
-                    <h2 className="text-2xl font-black mb-6 uppercase tracking-tight">Triple Match</h2>
-                    <p className="text-xs text-slate-400 mb-8 px-4 font-bold leading-relaxed text-center">Match de Kanji tegel met de juiste Onyomi en Kunyomi zinnen.</p>
-                    
-                    <label className="block text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest text-center">Aantal uit database ({data.length}):</label>
-                    <input type="number" min="1" max={data.length} value={gameSize} onChange={(e) => setGameSize(parseInt(e.target.value) || 1)} className="w-full text-center text-3xl font-black py-4 bg-slate-100 rounded-2xl mb-8 outline-none border-2 border-transparent focus:border-pinkish-cinnamon transition-all" />
-                    <button onClick={initGame} disabled={data.length === 0} className="w-full bg-[#D48166] hover:bg-[#c07259] text-white font-black py-4 rounded-2xl shadow-lg disabled:opacity-50 active:scale-95 transition-all uppercase tracking-widest">START</button>
-                </div>
-            </div>
+        // --- Shared UI Icons ---
+        const ArchiveIcon = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
         );
-    }
 
-    return (
-        <div className="max-w-6xl mx-auto px-4 py-8">
-            <div className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><Home size={20} /></button>
-                <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Progress ({matchedIds.length}/{cards.length / 3})</h2>
-                <button onClick={() => setIsPlaying(false)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><RefreshCcw size={20} /></button>
-            </div>
+        // --- Shared Tile Component ---
+        const KanjiTile = ({ kanji, onyomi, kunyomi, size = "large", colorTheme = "blue" }) => {
+            const containerStyles = {
+                large: "w-32 h-32 rounded-[32px] text-6xl",
+                medium: "w-20 h-20 rounded-[24px] text-4xl",
+                small: "w-16 h-16 rounded-[16px] text-3xl"
+            };
+            
+            const themeStyles = {
+                blue: "bg-[#D1E9FF] text-blue-900 border-blue-200",
+                amber: "bg-amber-50 text-slate-800 border-amber-100",
+                match: "bg-light-caucus-blue border-blue-200 text-blue-900"
+            };
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-12">
-                {cards.map(card => {
-                    if (matchedIds.includes(card.kanjiId)) return <div key={card.id} className="h-44 opacity-0 pointer-events-none"></div>;
-                    const isSelected = selected.some(s => s.id === card.id);
-                    
-                    let styleClass = "bg-white border-slate-200 text-slate-800";
-                    if (card.type === 'kanji') styleClass = "bg-[#D1E9FF] border-blue-200 text-blue-900";
-                    else if (card.type === 'onyomi') styleClass = "bg-[#00d5a0] border-[#00ba8b] text-white";
-                    else if (card.type === 'kunyomi') styleClass = "bg-[#ffb347] border-[#e69b32] text-white";
-
-                    return (
-                        <div key={card.id} onClick={() => !isSelected && selected.length < 3 && setSelected([...selected, card])}
-                            className={`cursor-pointer transition-all h-44 rounded-2xl border-4 flex flex-col items-center justify-center p-3 text-center shadow-md ${styleClass} ${isSelected ? 'ring-4 ring-slate-900 ring-offset-2 scale-95 z-10' : 'hover:scale-[1.02]'}`}>
-                            {card.type === 'kanji' ? (
-                                <>
-                                    <div className="text-6xl font-black kanji-font">{card.content}</div>
-                                    <div className="mt-2 space-y-0.5">
-                                        <div className="text-[9px] font-black uppercase text-blue-400/70 tracking-tighter">On: <span className="text-blue-900">{card.onyomi}</span></div>
-                                        <div className="text-[9px] font-black uppercase text-blue-400/70 tracking-tighter">Kun: <span className="text-blue-900">{card.kunyomi}</span></div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="overflow-hidden">
-                                    <div className="text-[12px] font-black kanji-font leading-tight mb-1">{card.sentence}</div>
-                                    <div className="text-[10px] italic mb-1 opacity-80">{card.romaji}</div>
-                                    <div className="text-[11px] font-bold mb-2">{card.trans}</div>
-                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-black/10 uppercase tracking-widest">{card.type}</span>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {history.length > 0 && (
-                <div className="bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
-                    <h3 className="text-sm font-black mb-6 flex items-center gap-2 text-slate-400 tracking-widest uppercase"><CheckCircle size={18} className="text-green-500" /> GEMATCHTE KANJI</h3>
-                    <div className="space-y-4">
-                        {history.map(item => {
-                            const isArchived = archivedIds.includes(item.id);
-                            return (
-                                <div key={item.id} className="relative flex flex-col md:flex-row gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-200 group transition-all hover:bg-white hover:shadow-md">
-                                    <button 
-                                        onClick={() => onArchive(item.id)} 
-                                        className={`absolute top-4 right-4 p-3 rounded-xl shadow-sm transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest ${isArchived ? 'bg-[#D48166] text-white' : 'bg-white text-slate-300 hover:text-[#D48166]'}`}
-                                        title={isArchived ? "Gearchiveerd" : "Archiveer deze kanji"}
-                                    >
-                                        <Archive size={16} />
-                                        <span className={isArchived ? 'inline' : 'hidden group-hover:inline'}>{isArchived ? 'Gearchiveerd' : 'Archiveer'}</span>
-                                    </button>
-                                    
-                                    <div className="flex items-center gap-5 md:w-1/4">
-                                        <div className="text-4xl font-black bg-[#D1E9FF] w-16 h-16 flex items-center justify-center rounded-2xl kanji-font text-blue-900 shadow-inner">{item.kanji}</div>
-                                        <div>
-                                            <div className="font-black text-[10px] uppercase text-slate-400 tracking-widest mb-0.5">Betekenis</div>
-                                            <div className="text-lg font-black text-slate-800">{item.meaning}</div>
-                                            <div className="text-[10px] font-bold text-slate-500">{item.onyomi} (On) / {item.kunyomi} (Kun)</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="text-[11px] bg-[#00d5a0] text-white p-4 rounded-xl shadow-sm">
-                                            <span className="font-black block mb-1 opacity-70 tracking-widest uppercase text-[9px]">Onyomi Gebruik</span>
-                                            <p className="font-bold mb-1">{item.sentenceOn}</p>
-                                            <p className="opacity-80 italic">{item.romajiOn}</p>
-                                            <p className="font-bold border-t border-white/20 pt-1.5 mt-1">{item.transOn}</p>
-                                        </div>
-                                        <div className="text-[11px] bg-[#ffb347] text-white p-4 rounded-xl shadow-sm">
-                                            <span className="font-black block mb-1 opacity-70 tracking-widest uppercase text-[9px]">Kunyomi Gebruik</span>
-                                            <p className="font-bold mb-1">{item.sentenceKun}</p>
-                                            <p className="opacity-80 italic">{item.romajiKun}</p>
-                                            <p className="font-bold border-t border-white/20 pt-1.5 mt-1">{item.transKun}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+            return (
+                <div className={`flex flex-col items-center justify-center shadow-inner border ${containerStyles[size]} ${themeStyles[colorTheme]}`}>
+                    <div className="font-black kanji-font leading-none">{kanji}</div>
+                    <div className="mt-2 flex flex-col items-center">
+                        <div className="text-[9px] font-black uppercase opacity-60 tracking-tighter leading-none">On: {onyomi}</div>
+                        <div className="text-[9px] font-black uppercase opacity-60 tracking-tighter leading-none mt-0.5">Kun: {kunyomi}</div>
                     </div>
                 </div>
-            )}
-        </div>
-    );
-};
+            );
+        };
 
-const LearnMode = ({ onBack, data, onArchive, archivedCount, onReset }) => {
-    const [search, setSearch] = useState("");
-    const filtered = useMemo(() => data.filter(k => k.kanji.includes(search) || k.meaning.toLowerCase().includes(search.toLowerCase())), [search, data]);
+        function App() {
+            const [view, setView] = useState('home');
+            const [archivedIds, setArchivedIds] = useState([]);
 
-    return (
-        <div className="min-h-screen pb-20">
-            <header className="bg-[#055D49] text-white py-12 px-6 shadow-2xl mb-12 rounded-b-[60px]">
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-6">
-                        <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all"><Home size={24} /></button>
-                        <div>
-                            <h1 className="text-3xl font-black tracking-tight uppercase">Bestuderen</h1>
-                            <p className="text-white/60 text-[10px] font-bold tracking-widest mt-1">{data.length} KANJI ACTIEF</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4 w-full md:w-auto text-slate-800">
-                        <div className="relative flex-1 md:w-64">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
-                            <input type="text" placeholder="Filter kanji..." className="w-full bg-white/10 border-none rounded-2xl py-4 pl-12 pr-6 text-white placeholder-white/30 focus:bg-white/20 transition-all outline-none" value={search} onChange={(e) => setSearch(e.target.value)} />
-                        </div>
-                        {archivedCount > 0 && (
-                            <button onClick={onReset} className="bg-red-500/20 hover:bg-red-500/40 text-red-200 p-4 rounded-2xl transition-all" title="Reset alle voortgang"><RefreshCcw size={20} /></button>
-                        )}
-                    </div>
+            useEffect(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try { setArchivedIds(JSON.parse(saved)); } 
+                    catch (e) { console.error("Fout bij laden", e); }
+                }
+            }, []);
+
+            const saveProgress = (newIds) => {
+                setArchivedIds(newIds);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newIds));
+            };
+
+            const toggleArchive = (id) => {
+                const newArchived = archivedIds.includes(id) 
+                    ? archivedIds.filter(aId => aId !== id)
+                    : [...archivedIds, id];
+                saveProgress(newArchived);
+            };
+
+            const resetArchive = () => {
+                if(confirm("Weet je zeker dat je alle voortgang wilt wissen?")) {
+                    saveProgress([]);
+                }
+            };
+
+            const activeData = useMemo(() => KANJI_DATA.filter(k => !archivedIds.includes(k.id)), [archivedIds]);
+            const masteredData = useMemo(() => KANJI_DATA.filter(k => archivedIds.includes(k.id)), [archivedIds]);
+
+            const renderView = () => {
+                switch(view) {
+                    case 'learn': return <LearnMode onBack={() => setView('home')} data={activeData} onArchive={toggleArchive} archivedCount={archivedIds.length} onReset={resetArchive} />;
+                    case 'match': return <MatchGame onBack={() => setView('home')} data={activeData} onArchive={toggleArchive} archivedIds={archivedIds} />;
+                    case 'mastery': return <MasteryMode onBack={() => setView('home')} data={masteredData} onRestore={toggleArchive} />;
+                    default: return <StartScreen onSelectMode={setView} activeCount={activeData.length} totalCount={KANJI_DATA.length} masteredCount={masteredData.length} />;
+                }
+            };
+
+            return (
+                <div className="min-h-screen selection:bg-[#D48166] selection:text-white">
+                    {renderView()}
                 </div>
-            </header>
+            );
+        }
 
-            <main className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filtered.map(item => (
-                    <div key={item.id} className="bg-white rounded-[40px] p-8 shadow-xl border-b-4 border-slate-100 flex flex-col gap-6 relative group transition-all hover:-translate-y-1">
-                        <div className="absolute top-6 right-6 flex items-center gap-2">
-                            <a 
-                                href={`https://jisho.org/search/${encodeURIComponent(item.kanji)}%20%23kanji`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-3 rounded-2xl bg-slate-50 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
-                                title="Bekijk op Jisho.org"
-                            >
-                                <ExternalLink size={20} />
-                                <span className="hidden group-hover:inline">Jisho</span>
-                            </a>
-                            <button 
-                                onClick={() => onArchive(item.id)} 
-                                className="p-3 rounded-2xl bg-slate-50 text-slate-300 hover:text-[#D48166] hover:bg-[#D48166]/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
-                            >
-                                <Archive size={20} />
-                                <span className="hidden group-hover:inline">Archiveer</span>
-                            </button>
-                        </div>
-
-                        <div className="flex items-center gap-8">
-                            <div className="text-7xl font-black bg-[#D1E9FF] w-28 h-28 flex items-center justify-center rounded-[32px] kanji-font text-blue-900 shadow-inner">
-                                {item.kanji}
+        const StartScreen = ({ onSelectMode, activeCount, totalCount, masteredCount }) => {
+            useEffect(() => { lucide.createIcons(); }, []);
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[90vh] px-4 py-10 text-center">
+                    <div className="bg-white p-10 rounded-[40px] shadow-2xl border-b-8 border-slate-200 max-w-lg w-full">
+                        <div className="text-7xl mb-6">🏯</div>
+                        <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Kanji Master 100</h1>
+                        <p className="text-slate-500 mb-10 italic">Local Storage Powered</p>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Actief</div>
+                                <div className="text-2xl font-black text-[#055D49]">{activeCount}</div>
                             </div>
-                            <div>
-                                <div className="font-black text-[10px] uppercase text-slate-400 tracking-widest mb-1">Betekenis</div>
-                                <div className="text-3xl font-black text-slate-900 leading-tight mb-2">{item.meaning}</div>
-                                <div className="flex gap-3">
-                                    <div className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">On: {item.onyomi}</div>
-                                    <div className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">Kun: {item.kunyomi}</div>
-                                </div>
+                            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                                <div className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest mb-1">Mastery</div>
+                                <div className="text-2xl font-black text-amber-600">{masteredCount}</div>
                             </div>
                         </div>
 
                         <div className="space-y-4">
-                            <div className="bg-[#00d5a0] text-white p-6 rounded-[32px] shadow-sm relative overflow-hidden">
-                                <span className="absolute top-0 right-0 p-2 bg-black/10 text-[8px] font-black uppercase tracking-widest rounded-bl-xl text-center">Onyomi Context</span>
-                                <p className="text-lg font-black mb-1 kanji-font">{item.sentenceOn}</p>
-                                <p className="opacity-80 italic mb-2 text-xs">{item.romajiOn}</p>
-                                <p className="font-bold border-t border-white/20 pt-3 text-sm">{item.transOn}</p>
-                            </div>
-                            <div className="bg-[#ffb347] text-white p-6 rounded-[32px] shadow-sm relative overflow-hidden">
-                                <span className="absolute top-0 right-0 p-2 bg-black/10 text-[8px] font-black uppercase tracking-widest rounded-bl-xl text-center">Kunyomi Context</span>
-                                <p className="text-lg font-black mb-1 kanji-font">{item.sentenceKun}</p>
-                                <p className="opacity-80 italic mb-2 text-xs">{item.romajiKun}</p>
-                                <p className="font-bold border-t border-white/20 pt-3 text-sm">{item.transKun}</p>
-                            </div>
+                            <button onClick={() => onSelectMode('learn')} className="w-full bg-[#055D49] hover:bg-[#044a3a] text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group">
+                                <div className="flex items-center gap-4 text-left">
+                                    <i data-lucide="book-open"></i>
+                                    <div>
+                                        <div className="text-lg">Leer-modus</div>
+                                        <div className="text-xs opacity-60 font-normal">Bestudeer actieve set</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="chevron-right"></i>
+                            </button>
+                            <button onClick={() => onSelectMode('match')} className="w-full bg-[#D48166] hover:bg-[#c07259] text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group">
+                                <div className="flex items-center gap-4 text-left">
+                                    <i data-lucide="layers"></i>
+                                    <div>
+                                        <div className="text-lg">Triple Matching</div>
+                                        <div className="text-xs opacity-60 font-normal">Test je kennis</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="chevron-right"></i>
+                            </button>
+                            <button onClick={() => onSelectMode('mastery')} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-5 rounded-2xl flex items-center justify-between px-8 transition-all hover:scale-[1.02] shadow-lg group border-b-4 border-slate-700">
+                                <div className="flex items-center gap-4 text-left">
+                                    <i data-lucide="award" className="text-amber-400"></i>
+                                    <div>
+                                        <div className="text-lg">Kanji Mastery</div>
+                                        <div className="text-xs opacity-60 font-normal">Bekijk gearchiveerde successen</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="chevron-right"></i>
+                            </button>
                         </div>
                     </div>
-                ))}
-            </main>
-        </div>
-    );
-};
-
-export default function App() {
-    const [view, setView] = useState('home');
-    const [user, setUser] = useState(null);
-    const [archivedIds, setArchivedIds] = useState([]);
-
-    useEffect(() => {
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth error", error);
-            }
+                </div>
+            );
         };
-        initAuth();
-        return onAuthStateChanged(auth, setUser);
-    }, []);
 
-    useEffect(() => {
-        if (!user) return;
-        const userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'learning_progress');
-        return onSnapshot(userDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setArchivedIds(docSnap.data().archivedIds || []);
-            }
-        }, (err) => console.error("Firestore error", err));
-    }, [user]);
+        const MasteryMode = ({ onBack, data, onRestore }) => {
+            const [search, setSearch] = useState("");
+            const filtered = useMemo(() => data.filter(k => k.kanji.includes(search) || k.meaning.toLowerCase().includes(search.toLowerCase())), [search, data]);
+            useEffect(() => { lucide.createIcons(); }, []);
 
-    const toggleArchive = async (id) => {
-        if (!user) return;
-        const newArchived = archivedIds.includes(id) 
-            ? archivedIds.filter(aId => aId !== id)
-            : [...archivedIds, id];
-        
-        try {
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'learning_progress'), {
-                archivedIds: newArchived
-            });
-        } catch (err) {
-            console.error("Save error", err);
-        }
-    };
+            return (
+                <div className="min-h-screen pb-20">
+                    <header className="bg-slate-900 text-white py-12 px-6 shadow-2xl mb-12 rounded-b-[60px] border-b-8 border-amber-500/30">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex items-center gap-6">
+                                <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all"><i data-lucide="home"></i></button>
+                                <div>
+                                    <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-3">Kanji Mastery</h1>
+                                    <p className="text-white/60 text-[10px] font-bold tracking-widest mt-1 uppercase">{data.length} KANJI BEHEERST</p>
+                                </div>
+                            </div>
+                            <div className="relative w-full md:w-64">
+                                <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40"></i>
+                                <input type="text" placeholder="Zoek in archief..." className="w-full bg-white/10 border-none rounded-2xl py-4 pl-12 pr-6 text-white outline-none" value={search} onChange={(e) => setSearch(e.target.value)} />
+                            </div>
+                        </div>
+                    </header>
+                    <main className="max-w-6xl mx-auto px-6 space-y-6">
+                        {filtered.length === 0 ? (
+                            <div className="text-center py-24 bg-white rounded-[40px] border-4 border-dashed border-slate-200"><p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Geen Kanji gevonden</p></div>
+                        ) : (
+                            filtered.map(item => (
+                                <div key={item.id} className="relative flex flex-col md:flex-row gap-6 p-6 bg-white rounded-[32px] border-b-4 border-amber-100 group transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-2">
+                                    <button onClick={() => onRestore(item.id)} className="absolute top-4 right-4 p-3 rounded-2xl bg-slate-50 text-slate-300 hover:text-[#055D49] hover:bg-[#055D49]/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest shadow-sm">
+                                        <i data-lucide="rotate-ccw"></i> <span className="hidden group-hover:inline">Herstel</span>
+                                    </button>
+                                    <div className="flex items-center gap-6 md:w-1/4">
+                                        <KanjiTile kanji={item.kanji} onyomi={item.onyomi} kunyomi={item.kunyomi} size="medium" colorTheme="amber" />
+                                        <div>
+                                            <div className="font-black text-[9px] uppercase text-slate-400 tracking-widest mb-0.5">Betekenis</div>
+                                            <div className="text-xl font-black text-slate-900 leading-tight">{item.meaning}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-[#00d5a0] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
+                                            <p className="font-black mb-1 text-sm kanji-font">{item.sentenceOn}</p>
+                                            <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiOn}</p>
+                                            <p className="font-bold border-t border-white/20 pt-1.5 mt-1 text-[11px]">{item.transOn}</p>
+                                        </div>
+                                        <div className="bg-[#ffb347] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
+                                            <p className="font-black mb-1 text-sm kanji-font">{item.sentenceKun}</p>
+                                            <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiKun}</p>
+                                            <p className="font-bold border-t border-white/20 pt-1.5 mt-1 text-[11px]">{item.transKun}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </main>
+                </div>
+            );
+        };
 
-    const resetArchive = async () => {
-        if (!user) return;
-        try {
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'learning_progress'), {
-                archivedIds: []
-            });
-        } catch (err) {
-            console.error("Reset error", err);
-        }
-    };
+        const LearnMode = ({ onBack, data, onArchive, archivedCount, onReset }) => {
+            const [search, setSearch] = useState("");
+            const filtered = useMemo(() => data.filter(k => k.kanji.includes(search) || k.meaning.toLowerCase().includes(search.toLowerCase())), [search, data]);
+            useEffect(() => { lucide.createIcons(); }, []);
+            return (
+                <div className="min-h-screen pb-20">
+                    <header className="bg-[#055D49] text-white py-12 px-6 shadow-2xl mb-12 rounded-b-[60px]">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex items-center gap-6">
+                                <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all"><i data-lucide="home"></i></button>
+                                <div><h1 className="text-3xl font-black tracking-tight uppercase">Bestuderen</h1><p className="text-white/60 text-[10px] font-bold tracking-widest mt-1">{data.length} KANJI ACTIEF</p></div>
+                            </div>
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <div className="relative flex-1 md:w-64"><i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40"></i><input type="text" placeholder="Zoek op kanji..." className="w-full bg-white/10 border-none rounded-2xl py-4 pl-12 pr-6 text-white outline-none" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                                {archivedCount > 0 && <button onClick={onReset} className="bg-red-500/20 text-red-100 px-5 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 transition-all hover:bg-red-500/30"><i data-lucide="rotate-ccw"></i> Reset</button>}
+                            </div>
+                        </div>
+                    </header>
+                    <main className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {filtered.map(item => (
+                            <div key={item.id} className="group relative bg-white p-8 rounded-[40px] shadow-lg border-b-8 border-slate-200 transition-all hover:-translate-y-2 duration-300">
+                                <button onClick={() => onArchive(item.id)} className="absolute top-6 right-6 p-3 bg-slate-50 text-slate-300 hover:text-[#D48166] opacity-0 group-hover:opacity-100 transition-all rounded-2xl shadow-sm"><ArchiveIcon /></button>
+                                <div className="flex justify-between items-start mb-6">
+                                    <KanjiTile kanji={item.kanji} onyomi={item.onyomi} kunyomi={item.kunyomi} size="large" colorTheme="blue" />
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Betekenis</div>
+                                        <div className="text-2xl font-black text-[#055D49] leading-tight">{item.meaning}</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="bg-[#D48166] p-5 rounded-[24px] text-white shadow-md relative overflow-hidden">
+                                        <p className="text-sm font-bold kanji-font mb-1">{item.sentenceOn}</p>
+                                        <p className="text-[10px] opacity-70 italic mb-2 leading-none">{item.romajiOn}</p>
+                                        <p className="text-[10px] font-bold border-t border-white/20 pt-2">{item.transOn}</p>
+                                    </div>
+                                    <div className="bg-[#D48166] p-5 rounded-[24px] text-white shadow-md relative overflow-hidden">
+                                        <p className="text-sm font-bold kanji-font mb-1">{item.sentenceKun}</p>
+                                        <p className="text-[10px] opacity-70 italic mb-2 leading-none">{item.romajiKun}</p>
+                                        <p className="text-[10px] font-bold border-t border-white/20 pt-2">{item.transKun}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </main>
+                </div>
+            );
+        };
 
-    const activeData = useMemo(() => KANJI_DATA.filter(k => !archivedIds.includes(k.id)), [archivedIds]);
-    const masteredData = useMemo(() => KANJI_DATA.filter(k => archivedIds.includes(k.id)), [archivedIds]);
+        const MatchGame = ({ onBack, data, onArchive, archivedIds }) => {
+            const [gameSize, setGameSize] = useState(5);
+            const [cards, setCards] = useState([]);
+            const [selected, setSelected] = useState([]);
+            const [matchedIds, setMatchedIds] = useState([]);
+            const [history, setHistory] = useState([]);
+            const [isPlaying, setIsPlaying] = useState(false);
 
-    const renderView = () => {
-        switch(view) {
-            case 'learn': return <LearnMode onBack={() => setView('home')} data={activeData} onArchive={toggleArchive} archivedCount={archivedIds.length} onReset={resetArchive} />;
-            case 'match': return <MatchGame onBack={() => setView('home')} data={activeData} onArchive={toggleArchive} archivedIds={archivedIds} />;
-            case 'mastery': return <MasteryMode onBack={() => setView('home')} data={masteredData} onRestore={toggleArchive} />;
-            default: return <StartScreen onSelectMode={setView} activeCount={activeData.length} totalCount={KANJI_DATA.length} masteredCount={masteredData.length} />;
-        }
-    };
+            useEffect(() => { if(isPlaying) lucide.createIcons(); }, [isPlaying, history]);
 
-    return (
-        <div className="min-h-screen bg-[#F0F4F8] font-sans selection:bg-[#D48166] selection:text-white">
-            <style>{`
-                .kanji-font { font-family: "Hiragino Kaku Gothic Pro", "Meiryo", "MS PGothic", "Noto Sans JP", sans-serif; }
-                .animate-in { animation: fadeIn 0.5s ease-out; }
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
+            const initGame = useCallback(() => {
+                const count = Math.min(gameSize, data.length);
+                const shuffled = [...data].sort(() => 0.5 - Math.random()).slice(0, count);
+                const gameCards = [];
+                shuffled.forEach(item => {
+                    gameCards.push({ id: `k-${item.id}`, kanjiId: item.id, type: 'kanji', content: item.kanji, onyomi: item.onyomi, kunyomi: item.kunyomi });
+                    gameCards.push({ id: `on-${item.id}`, kanjiId: item.id, type: 'onyomi', sentence: item.sentenceOn, romaji: item.romajiOn, trans: item.transOn });
+                    gameCards.push({ id: `kun-${item.id}`, kanjiId: item.id, type: 'kunyomi', sentence: item.sentenceKun, romaji: item.romajiKun, trans: item.transKun });
+                });
+                setCards(gameCards.sort(() => 0.5 - Math.random()));
+                setMatchedIds([]);
+                setHistory([]);
+                setSelected([]);
+                setIsPlaying(true);
+            }, [gameSize, data]);
+
+            useEffect(() => {
+                if (selected.length === 3) {
+                    const [c1, c2, c3] = selected;
+                    if (c1.kanjiId === c2.kanjiId && c2.kanjiId === c3.kanjiId && new Set([c1.type, c2.type, c3.type]).size === 3) {
+                        setTimeout(() => {
+                            setMatchedIds(prev => [...prev, c1.kanjiId]);
+                            const matchedKanji = data.find(k => k.id === c1.kanjiId);
+                            if (matchedKanji) setHistory(prev => [matchedKanji, ...prev]);
+                            setSelected([]);
+                        }, 500);
+                    } else {
+                        setTimeout(() => setSelected([]), 1000);
+                    }
                 }
-            `}</style>
-            {renderView()}
-        </div>
-    );
-}
+            }, [selected, data]);
+
+            if (!isPlaying) {
+                return (
+                    <div className="max-w-md mx-auto py-20 px-4 text-center">
+                        <button onClick={onBack} className="mb-8 text-slate-500 flex items-center gap-2 mx-auto font-bold uppercase text-xs tracking-widest transition-all hover:text-slate-800"><i data-lucide="home"></i> Home</button>
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-slate-200">
+                            <h2 className="text-2xl font-black mb-6 uppercase tracking-tight">Triple Match</h2>
+                            <p className="text-xs text-slate-400 mb-8 px-4 font-bold leading-relaxed">Combineer de Kanji met de juiste Onyomi en Kunyomi zinnen.</p>
+                            <label className="block text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">Aantal Kanji ({data.length} beschikbaar):</label>
+                            <input type="number" min="1" max={data.length} value={gameSize} onChange={(e) => setGameSize(parseInt(e.target.value) || 1)} className="w-full text-center text-3xl font-black py-4 bg-slate-100 rounded-2xl mb-8 outline-none border-2 border-transparent focus:border-pinkish-cinnamon transition-all" />
+                            <button onClick={initGame} disabled={data.length === 0} className="w-full bg-[#D48166] hover:bg-[#c07259] text-white font-black py-4 rounded-2xl shadow-lg disabled:opacity-50 transition-all uppercase tracking-widest">START GAME</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-6xl mx-auto px-4 py-8">
+                    <div className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border-b-2 border-slate-100">
+                        <button onClick={() => setIsPlaying(false)} className="p-2 text-slate-400 hover:text-slate-600"><i data-lucide="arrow-left"></i></button>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Gematched: {matchedIds.length} / {cards.length / 3}</h2>
+                        <button onClick={initGame} className="p-2 text-[#D48166] hover:rotate-180 transition-all duration-500"><i data-lucide="refresh-ccw"></i></button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-12">
+                        {cards.map(card => {
+                            if (matchedIds.includes(card.kanjiId)) return <div key={card.id} className="h-44 opacity-0 pointer-events-none"></div>;
+                            const isSelected = selected.some(s => s.id === card.id);
+                            
+                            let styleClass = "bg-white border-slate-200 text-slate-800";
+                            if (card.type === 'kanji') styleClass = "bg-light-caucus-blue border-blue-200 text-blue-900";
+                            else if (card.type === 'onyomi') styleClass = "bg-[#00d5a0] border-[#00ba8b] text-white";
+                            else if (card.type === 'kunyomi') styleClass = "bg-[#ffb347] border-[#e69b32] text-white";
+
+                            return (
+                                <div key={card.id} onClick={() => !isSelected && selected.length < 3 && setSelected([...selected, card])}
+                                    className={`cursor-pointer transition-all h-44 rounded-2xl border-4 flex flex-col items-center justify-center p-3 text-center shadow-md ${styleClass} ${isSelected ? 'ring-4 ring-slate-900 scale-95 z-10 shadow-lg' : 'hover:scale-[1.02]'}`}>
+                                    {card.type === 'kanji' ? (
+                                        <KanjiTile kanji={card.content} onyomi={card.onyomi} kunyomi={card.kunyomi} size="small" colorTheme="match" />
+                                    ) : (
+                                        <div className="overflow-hidden">
+                                            <div className="text-[12px] font-black kanji-font leading-tight mb-1">{card.sentence}</div>
+                                            <div className="text-[10px] italic mb-0.5 opacity-80 leading-none">{card.romaji}</div>
+                                            <div className="text-[11px] font-bold mb-2 leading-tight">{card.trans}</div>
+                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-black/10 uppercase tracking-widest">{card.type}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {history.length > 0 && (
+                        <div className="space-y-6 bg-white p-8 rounded-[40px] shadow-lg border border-slate-100">
+                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2 px-2"><i data-lucide="check-circle" className="text-green-500"></i> Match Historie</h3>
+                            <div className="space-y-4">
+                                {history.map(item => (
+                                    <div key={item.id} className="relative flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 rounded-[32px] border border-slate-200 group animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <KanjiTile kanji={item.kanji} onyomi={item.onyomi} kunyomi={item.kunyomi} size="medium" colorTheme="blue" />
+                                            <button 
+                                                onClick={() => onArchive(item.id)} 
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${archivedIds.includes(item.id) ? 'bg-[#D48166] text-white shadow-inner' : 'bg-white text-slate-400 border border-slate-200 hover:text-[#D48166] hover:border-[#D48166]'}`}
+                                            >
+                                                <ArchiveIcon className="w-3.5 h-3.5" />
+                                                <span>{archivedIds.includes(item.id) ? 'Gearchiveerd' : 'Archiveer'}</span>
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="flex-1 w-full flex flex-col gap-4">
+                                            <div className="text-xl font-black text-slate-900 leading-tight border-b border-slate-200 pb-2 mb-1 flex items-center gap-3">
+                                                <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-500 tracking-tighter">BETEKENIS</span>
+                                                {item.meaning}
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="bg-[#00d5a0] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
+                                                    <p className="font-black mb-1 text-sm kanji-font">{item.sentenceOn}</p>
+                                                    <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiOn}</p>
+                                                    <p className="font-bold border-t border-white/20 pt-1.5 mt-1 text-[11px]">{item.transOn}</p>
+                                                </div>
+                                                <div className="bg-[#ffb347] text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
+                                                    <p className="font-black mb-1 text-sm kanji-font">{item.sentenceKun}</p>
+                                                    <p className="opacity-80 italic mb-1 text-[10px]">{item.romajiKun}</p>
+                                                    <p className="font-bold border-t border-white/20 pt-1.5 mt-1 text-[11px]">{item.transKun}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
